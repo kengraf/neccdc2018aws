@@ -1,0 +1,25 @@
+# FILENAME
+# push-templates-to-s3.yml
+#
+# DESCRIPTION
+# Helper playbook to keep cloudformation templates that are 
+# edited locally in sync with the 3 bucket used by cloudformation
+# 
+# REQUIREMENTS
+# Default AWS credentials have write access to S3
+#
+# EXECUTE
+# ansible-playbook ./playbooks/push-templates-to-s3.yml
+#
+---
+- hosts: localhost
+  connection: local
+  gather_facts: False
+  vars:
+    timestamp: "{{ lookup('pipe', 'date +%Y%m%d-%H%M%S') }}"
+  tasks:
+    - name: Sync CFT templates from local repo to S3
+      s3_sync:
+        bucket: wildeagle
+        file_root: ../templates/
+        file_change_strategy: force

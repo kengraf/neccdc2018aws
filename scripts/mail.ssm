@@ -1,0 +1,3 @@
+echo 'mason.{TEAM}.wildeagle.net' > /usr/share/nginx/html/www/dns.html
+wget -O /tmp/{team}.pem https://s3.amazonaws.com/wildeagle-{team}/{team}.pem
+

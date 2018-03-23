@@ -1,0 +1,2 @@
+sudo wget https://s3.amazonaws.com/wildeagle/team05/nginx.conf > /etc/nginx/nginx.conf 
+sudo service nginx restart

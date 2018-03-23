@@ -1,0 +1,68 @@
+# DESCRIPTION
+# Terminates a specific instance from the competition environment
+# 
+# REQUIREMENTS
+# 
+# pip install boto3
+# pip install botocore
+# pip install ansible
+#
+# EXECUTE
+#
+# This playbook will use default AWS credentials if a team/school name is not provided;
+# this option is provided for the black team to push multiple environments
+# Required var: machine=[friendly competition name tag]
+# Optional vars:  team=team[00-99] campus=[edu domain]
+#
+# Good practice: Passwords should NOT be provided in cleartext. They should be edited and encrypted using:
+# ansible-vault encrypt firewall-secrets.yml
+#
+# ansible-playbook delete-instance.yml  --extra-vars "machine=XXX"
+#
+---
+- hosts: localhost
+  connection: local
+  gather_facts: False
+
+  vars_files:
+    - event-vars.yml
+
+  tasks:
+
+    - name: Retrieve instance id
+      ec2_instance_facts:
+        aws_access_key: "{{ access_key_id }}"
+        aws_secret_key: "{{ secret_access_key }}"
+        filters:
+          "tag:Name": "{{ machine_name }}"
+          "instance-state-name": running
+      register: ec2_facts
+      
+    - set_fact:
+        ec2: "{{ ec2_facts.instances[0] }}" 
+       
+    - debug:
+        msg: "{{ ec2.instance_id }} {{ ec2.public_ip_address }}" 
+
+                
+    # Deploy EC2 instance to team VPC
+    - name: Terminate {{ machine_name }}.{{ team_name }}.neccdc2018.org
+      ec2:
+        aws_access_key: "{{ access_key_id }}"
+        aws_secret_key: "{{ secret_access_key }}"
+        state: absent
+        instance_ids: "{{ ec2.instance_id }}"
+        region: "{{ region }}"
+
+    - name: Delete Route53 A record
+      route53:
+        aws_access_key: "{{ access_key_id }}"
+        aws_secret_key: "{{ secret_access_key }}"
+        state: absent
+        zone: "{{ team_name }}.neccdc2018.org"
+        record: "{{ machine_name }}.{{ team_name }}.neccdc2018.org"
+        type: A
+        ttl: 7200
+        value: "{{ ec2.public_ip_address }}"
+
+

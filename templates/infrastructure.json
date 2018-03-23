@@ -1,0 +1,352 @@
+{
+   "AWSTemplateFormatVersion": "2010-09-09",
+   "Description": "This template will deploy a full Northeast CCDC environment. Must have full admin rights to deploy. ",
+    "Metadata" : {
+        "Stack" : {"Value" : "0"},
+        "VersionDate" : { "Value" : "09292015" },
+        "Identifier" : { "Value" : "main-infrastructure" },
+        "Input" : { "Description" : "Input of all required parameters in nested stacks" },
+        "Output" : { "Description" : "N/A" }
+    },
+   "Parameters": {
+        "pCreateCloudTrail" : {
+                "Description" : "Create new CloudTrail Trail (yes or no), if yes must provide pS3CloudTrailBucketExisting or pS3CloudTrailLocal parameter? 'no' will not setup any CloudTrail logging",
+                "Type" : "String",
+                "Default" : "no"
+        },
+        "pS3CloudTrailBucketExisting" : {
+                "Description" : "Name of EXISTING S3 log bucket for CloudTrail if not creating new",
+                "Type" : "String",
+		"Default" : "none"
+        },
+
+        "pS3CloudTrailLocal" : {
+                "Description" : "Name of new local bucket for S3 logging (required)",
+                "Type" : "String",
+		"Default" : "none"
+        },
+      "pKeyName": {
+         "Description": "Key Name for Instance",
+         "Type": "AWS::EC2::KeyPair::KeyName",
+         "Default": ""
+      },
+      "pTeamName": {
+	 "Description": "Team name  teamXX",
+	 "Type": "String",
+	 "Default": "test"
+      },
+      "pEventDomain": {
+	 "Description": "Domain Name for the event",
+	 "Type": "String",
+	 "Default": "wildeagle.net"
+      },
+      "pInstanceType": {
+         "Description": "EC2 instance type",
+         "Type": "String",
+         "Default": "t2.micro",
+         "AllowedValues": [
+            "t2.micro",
+            "m4.2xlarge",
+            "m4.2xlarge",
+            "c4.2xlarge",
+            "c4.4xlarge"
+         ],
+         "ConstraintDescription": "must be a valid EC2 instance type, existing in the mapping."
+      },
+      "pRegionDomain": {
+         "Description": "Region name where resources will deploy",
+         "Type": "String",
+         "Default": "us-east-1.compute.internal"
+      },
+      "pRegionAZName": {
+         "Description": "Availability Zone Name in Region",
+         "Type": "AWS::EC2::AvailabilityZone::Name",
+	 "Default": "us-east-1a"
+      },
+      "pVPCName": {
+         "Description": "Blue team VPC name",
+         "Type": "String",
+         "Default": "BlueTeamVPC"
+      },
+      "pVpcCIDR": {
+         "Description": "CIDR block for Blue Team VPC",
+         "Type": "String",
+         "Default": "10.0.0.0/16",
+         "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+         "ConstraintDescription": "must be a valid IP CIDR range of the form x.x.x.x/x."
+      },
+      "pCampusCIDR": {
+	 "Description": "CIDR block for allowed for Blue Team access",
+	 "Type": "String",
+	 "Default": "132.177.16.0/16",
+	 "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+	 "ConstraintDescription": "must be a valid IP CIDR range of the form x.x.x.x/x."
+      },
+      "pWhiteCIDR": {
+	 "Description": "CIDR block for allowed for White Team access",
+	 "Type": "String",
+	 "Default": "132.177.16.0/16",
+	 "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+	 "ConstraintDescription": "must be a valid IP CIDR range of the form x.x.x.x/x."
+      },
+      "pPublicCIDR": {
+         "Description": "CIDR block for PublicSubnet",
+         "Type": "String",
+         "Default": "10.0.0.0/24",
+         "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+         "ConstraintDescription": "must be a valid IP CIDR range of the form x.x.x.x/x."
+      },
+      "pPrivateCIDR": {
+         "Description": "CIDR block for PrivateSubnet",
+         "Type": "String",
+         "Default": "10.0.1.0/24",
+         "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+         "ConstraintDescription": "must be a valid IP CIDR range of the form x.x.x.x/x."
+      },
+
+      "pWebContentBucketName": {
+         "Description": "Name of S3 Bucket to use for web content (optional)",
+         "Type": "String",
+	 "Default" : "none"
+      },
+      "pAppLogsBucketName": {
+         "Description": "Name of S3 Bucket to use for application logs (optional)",
+         "Type": "String",
+	 "Default" : "none"
+      },
+      "pBackupBucketName": {
+         "Description": "Name of S3 Bucket to use for backup/DR data (optional)",
+         "Type": "String",
+	 "Default" : "none"
+      },
+      "stack1URL": {
+         "Description": "Valid S3 URL of location where infrastructure template exists",
+         "Type": "String",
+         "Default": "https://s3.amazonaws.com/wildeagle/group1-access.json"
+      },
+      "stack2URL": {
+         "Description": "Valid S3 URL of location where Stack2 template exists",
+         "Type": "String",
+         "Default": "https://s3.amazonaws.com/wildeagle/group2-network.json"
+      },
+      "stack3URL": {
+         "Description": "Valid S3 URL of location where Stack3 template exists",
+         "Type": "String",
+         "Default": "https://s3.amazonaws.com/wildeagle/group3-resources.json"
+      },
+      "stack4URL": {
+         "Description": "Valid S3 URL of location where Stack4 template exists",
+         "Type": "String",
+	 "Default" : "https://s3.amazonaws.com/wildeagle/group4-services.json"
+      },
+      "pWebServerAMI": {
+         "Description": "Which webserver AMI do you want to use, default ",
+         "Type": "String",
+	 "Default" : "ami-60b6c60a"
+      }
+   },
+   "Conditions": {
+      "CreateWebAppBucket" : {
+	 "Fn::Not" : [  {"Fn::Equals" : [ { "Ref" : "pWebContentBucketName" }, "none"] } ]
+      },
+      "CreateBackupBucket" : {
+         "Fn::Not" : [ { "Fn::Equals" : [ { "Ref" : "pBackupBucketName" }, "none"] } ]
+      },
+      "CreateAppLogsBucket" : {
+         "Fn::Not" : [ { "Fn::Equals" : [ { "Ref" : "pAppLogsBucketName" }, "none"] } ]
+      },
+      "CreateStack1": {
+         "Fn::Not": [ { "Fn::Equals": [ { "Ref": "stack1URL" }, "" ] } ]
+      },
+      "CreateStack2": {
+         "Fn::Not": [ { "Fn::Equals": [ { "Ref": "stack2URL" }, "" ] } ]
+      },
+      "CreateStack3": {
+         "Fn::Not": [ { "Fn::Equals": [ { "Ref": "stack3URL" }, "" ] } ]
+      },
+      "CreateStack4": {
+         "Fn::Not": [ { "Fn::Equals": [ { "Ref": "stack4URL" }, "" ] } ]
+      }
+   },
+   "Resources": {
+      "stack1": {
+         "Type": "AWS::CloudFormation::Stack",
+	 "Condition": "CreateStack1",
+         "Properties": {
+            "TemplateURL": {
+               "Ref": "stack1URL"
+            },
+            "TimeoutInMinutes": "20",
+	    "Parameters" : {
+		"pCreateCloudTrail" : {
+			"Ref" : "pCreateCloudTrail"
+		},
+		"pS3CloudTrailBucketExisting" : {
+		    "Ref" : "pS3CloudTrailBucketExisting"
+		},
+		"pS3CloudTrailLocal" : {
+		    "Ref" : "pS3CloudTrailLocal"
+		}
+	    }
+         }
+      },
+      "stack2": {
+         "Type": "AWS::CloudFormation::Stack",
+         "Condition": "CreateStack2",
+         "Properties": {
+            "TemplateURL": { "Ref": "stack2URL" },
+            "TimeoutInMinutes": "20",
+            "Parameters": {
+               "pRegionDomain": {
+                  "Ref": "pRegionDomain"
+               },
+               "pRegionAZName": {
+                  "Ref": "pRegionAZName"
+               },
+               "pVPCName": {
+                  "Ref": "pVPCName"
+               },
+               "pVpcCIDR": {
+                  "Ref": "pVpcCIDR"
+               },
+               "pPublicCIDR": {
+		  "Ref": "pPublicCIDR"
+               },
+               "pPrivateCIDR": {
+                  "Ref": "pPrivateCIDR"
+               },
+               "pKeyName": {
+                  "Ref": "pKeyName"
+               },
+	       "pTeamName": {
+		  "Ref": "pTeamName"
+	       },
+	       "pEventDomain": {
+		  "Ref": "pEventDomain"
+	       }
+            }
+         }
+      },
+      "stack3": {
+         "Type": "AWS::CloudFormation::Stack",
+         "Condition": "CreateStack3",
+	 "DependsOn" : "stack2",
+         "Properties": {
+            "TemplateURL": {
+               "Ref": "stack3URL"
+            },
+            "TimeoutInMinutes": "20",
+            "Parameters": {
+               "pBlueTeamVPC": {
+                  "Fn::GetAtt" : [ "stack2", "Outputs.rBlueTeamVPC" ]
+               },
+	       "pVpcCIDR": {
+		  "Ref": "pVpcCIDR"
+	       },
+	       "pWhiteCIDR": {
+		  "Ref": "pWhiteCIDR"
+	       },
+	       "pCampusCIDR": {
+		  "Ref": "pCampusCIDR"
+	       },
+               "pPublicSubnet": {
+			"Fn::GetAtt" : [ "stack2", "Outputs.rPublicSubnet" ]
+               },
+               "pPrivateSubnet": {
+			"Fn::GetAtt" : [ "stack2", "Outputs.rPrivateSubnet" ]
+               },
+               "pS3WebContentBucketName" : {
+		"Fn::If" : [ "CreateWebAppBucket", { "Ref" : "pWebContentBucketName" },"false"]
+               },
+               "pS3AppLogsBucketName" : {
+		 "Fn::If" : [ "CreateAppLogsBucket", { "Ref" : "pAppLogsBucketName" },"false"]
+               },
+               "pS3BackupBucketName": {
+		 "Fn::If" : [ "CreateBackupBucket", { "Ref" : "pBackupBucketName" },"false"]
+               }
+            }
+         }
+      },
+      "stack4": {
+         "Type": "AWS::CloudFormation::Stack",
+	 "DependsOn" : "stack3",
+         "Condition": "CreateStack4",
+         "Properties": {
+            "TemplateURL": {
+               "Ref": "stack4URL"
+            },
+            "TimeoutInMinutes": "30",
+            "Parameters": {
+               "pBlueTeamVPC": {
+		 "Fn::GetAtt" : [ "stack2", "Outputs.rBlueTeamVPC" ]
+               },
+               "pVpcCIDR": {
+                  "Ref": "pVpcCIDR"
+               },
+	       "pCompetitionSG": {
+		  "Fn::GetAtt" : [ "stack3", "Outputs.rCompetitionSG" ]
+	       },
+	       "pCompetitionPrivateSG": {
+		  "Fn::GetAtt" : [ "stack3", "Outputs.rCompetitionPrivateSG" ]
+	       },
+	       "pBlueTeamIGW": {
+		 "Fn::GetAtt" : [ "stack2", "Outputs.rBlueTeamIGW" ]
+	       },
+	       "pDHCPoptions": {
+		 "Fn::GetAtt" : [ "stack2", "Outputs.rDHCPoptions" ]
+	       },
+	       "pNACLBlueTeam": {
+		 "Fn::GetAtt" : [ "stack2", "Outputs.rNACLBlueTeam" ]
+	       },
+               "pRouteTablePublic": {
+		 "Fn::GetAtt" : [ "stack2", "Outputs.rRouteTablePublic" ]
+               },
+	       "pRouteTablePrivate": {
+		 "Fn::GetAtt" : [ "stack2", "Outputs.rRouteTablePrivate" ]
+	       },
+	       "pPublicSubnet": {
+		 "Fn::GetAtt" : [ "stack2", "Outputs.rPublicSubnet" ]
+	       },
+               "pPrivateSubnet": {
+		 "Fn::GetAtt" : [ "stack2", "Outputs.rPrivateSubnet" ]
+               },
+               "pKeyName": {
+                  "Ref": "pKeyName"
+               },
+	       "pTeamName": {
+		  "Ref": "pTeamName"
+	       },
+	       "pEventDomain": {
+		  "Ref": "pEventDomain"
+	       },
+               "pRegionAZName": {
+                  "Ref": "pRegionAZName"
+               },
+               "pInstanceType": {
+                  "Ref": "pInstanceType"
+               },
+               "pWebServerAMI": {
+                  "Ref": "pWebServerAMI"
+               }
+            }
+         }
+      }
+   },
+   "Outputs": {
+      "FirewallManagementEIP": {
+	"Value" : { "Fn::GetAtt" : [ "stack4", "Outputs.FirewallManagementEIP" ] }
+      },
+      "rFwPublicIP": {
+	"Value" : { "Fn::GetAtt" : [ "stack4", "Outputs.rFwPublicIP" ] }
+      },
+      "rFwPrivateIP": {
+	"Value" : { "Fn::GetAtt" : [ "stack4", "Outputs.rFwPrivateIP" ] }
+      },
+      "TemplateType": {
+         "Value": "Standard Multi-Tier Web Application"
+      },
+      "TemplateVersion": {
+         "Value": "1.0"
+      }
+   }
+}

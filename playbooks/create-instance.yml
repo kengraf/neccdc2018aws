@@ -1,0 +1,114 @@
+# DESCRIPTION
+# Deploys a specific instance to the competition environment
+# 
+# REQUIREMENTS
+# 
+# pip install boto3
+# pip install botocore
+# pip install ansible
+#
+# EXECUTE
+#
+# This playbook will use default AWS credentials if a team/school name is not provided;
+# this option is provided for the black team to push multiple environments
+# Required var: machine=[friendly competition name tag]
+# Optional vars:  team=team[00-99]
+#
+# Good practice: Passwords should NOT be provided in cleartext. They should be edited and encrypted using:
+# ansible-vault encrypt firewall-secrets.yml
+#
+# ansible-playbook create-instance.yml  --extra-vars "machine=XXX"
+#
+---
+- hosts: localhost
+  connection: local
+  gather_facts: False
+
+  vars_files:
+    - event-vars.yml
+
+  tasks:
+
+    - stat: path="{{ user_data_filename }}"
+      register: user_data_file
+      
+    - set_fact:
+        user_data: "{{ lookup('file', user_data_filename ) }}"
+      when: user_data_file.stat.exists == True
+      
+    - debug:
+        msg: "{{ user_data }}"
+      
+    - name: Retrieve competition VPC id
+      ec2_vpc_net_facts:
+        aws_access_key: "{{ access_key_id }}"
+        aws_secret_key: "{{ secret_access_key }}"
+        region: "{{ region }}"
+        filters:
+          "tag:Name": "BlueTeamVPC"
+      register: vpc_facts
+
+    - set_fact:
+        vpc_id: "{{ vpc_facts.vpcs[0].id }}" 
+    
+    - debug:
+        msg: "{{ vpc_id }}" 
+        
+    - name: Retrieve private subnet id
+      ec2_vpc_subnet_facts:
+        aws_access_key: "{{ access_key_id }}"
+        aws_secret_key: "{{ secret_access_key }}"
+        filters:
+          vpc-id: "{{ vpc_id }}" 
+          "tag:Name": "{{ subnet_name }}"
+      register: subnet_facts
+    
+    - set_fact:
+        subnet_id: "{{ subnet_facts.subnets[0].id }}" 
+       
+    - debug:
+        msg: "{{ subnet_id }}" 
+        
+    - name: Retrieve security group id
+      ec2_group_facts:
+        aws_access_key: "{{ access_key_id }}"
+        aws_secret_key: "{{ secret_access_key }}"
+        filters:
+          "tag:Name": CompetitionScoredSG
+      register: sg_facts
+    
+    - set_fact:
+        sg_id: "{{ sg_facts.security_groups[0].group_id }}" 
+
+    - debug:
+        msg: "group_id: {{ sg_id }}" 
+                
+    # Deploy EC2 instance to team VPC
+    - name: Deploy {{ machine_name }} for {{ team_name }}
+      ec2:
+        aws_access_key: "{{ access_key_id }}"
+        aws_secret_key: "{{ secret_access_key }}"
+        key_name: "{{ key_name }}"
+        instance_type: "{{ instance_type }}"
+        image: "{{ ami }}"
+        wait: yes
+        group_id: "{{ sg_id }}"
+        count: 1
+        vpc_subnet_id: "{{ subnet_id }}"
+        region: "us-east-1"
+        assign_public_ip: yes
+        private_ip: ip_address
+        instance_profile_name: EC2-SSM
+        user_data: "{{ user_data | default('') }}"
+        instance_tags:
+          {"Name" : "{{ machine_name }}", "DNS":"{{ machine_name }}.{{ team_name }}.{{ event_domain }}", "Type": "{{ machine_name }}"}
+      register: ec2
+
+    - set_fact:
+        subnet_id: "{{ ec2 }}" 
+       
+    - debug:
+        msg: "{{ ec2.instances[0].id }} {{ ec2.instances[0].public_ip }}" 
+
+
+

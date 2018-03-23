@@ -1,0 +1,734 @@
+{
+   "AWSTemplateFormatVersion": "2010-09-09",
+   "Description": "Install PANW VM-Series Firewall (Version 8.0.0) with BYOL in front of NGINX server",
+   "Metadata" : {
+      "Stack" : {"Value" : "4"},
+      "VersionDate" : { "Value" : "09302017" },
+      "Identifier" : { "Value" : "stack4-application" },
+      "Input" : { "Description" : "VPC, SubnetIDs, S3 bucket names, CIDR blocks, KeyNames, AMIs, DB name and password" },
+      "Output" : { "Description" : "Outputs ID of all deployed resources" }
+   },
+   "Parameters": {
+      "pKeyName": {
+         "Description": "Name of an existing EC2 KeyPair to enable SSH access to the server and VM-Series (Hint: You MUST have its private key)",
+         "Type": "AWS::EC2::KeyPair::KeyName",
+         "Default": "NECCDC"
+      },
+      "pTeamName": {
+	 "Description": "Team name  teamXX",
+	 "Type": "String",
+	 "Default": "test"
+      },
+      "pEventDomain": {
+	 "Description": "Domain Name for the event",
+	 "Type": "String",
+	 "Default": "wildeagle.net"
+      },
+      "pVpcCIDR": {
+         "Description": "CIDR block for Blue Team VPC",
+         "Type": "String"
+      },
+      "pBlueTeamVPC": {
+         "Description": "Blue Team VPC",
+         "Type": "String"
+      },
+      "pBlueTeamIGW": {
+	 "Description": "Blue Team Internet Gateway",
+	 "Type": "String"
+      },
+      "pDHCPoptions": {
+	 "Description": "Blue Team DHCP Options",
+	 "Type": "String"
+      },
+      "pNACLBlueTeam": {
+	 "Description": "Network ACL",
+	 "Type": "String"
+      },
+      "pRouteTablePublic": {
+	 "Description": "PublicSubnet Route Table",
+	 "Type": "String"
+      },
+      "pRouteTablePrivate": {
+	 "Description": "PrivateSubnet Route Table",
+	 "Type": "String"
+      },
+      "pPublicSubnet": {
+         "Description": "PublicSubnet",
+         "Type": "String"
+      },
+      "pPrivateSubnet": {
+         "Description": "PrivateSubnet",
+         "Type": "String"
+      },
+      "pInstanceType": {
+         "Description": "Instance type for the webservers",
+         "Type": "String"
+      },
+      "pCompetitionSG": {
+         "Description": "SG for external gateway for scored services",
+         "Type": "String"
+      },
+      "pCompetitionPrivateSG": {
+	 "Description": "SG for protected systems",
+	 "Type": "String"
+      },
+      "pRegionAZName": {
+         "Description": "Availability Zone Name in Region",
+         "Type": "String"
+      },
+      "pWebServerAMI": {
+         "Description": "Which webserver AMI do you want to use, default ",
+         "Type": "String",
+	 "Default" : "none"
+      }
+   },
+   "Mappings": {
+      "InstanceMap" : {
+	"team01" : { 
+	  "paloalto": "ami-493c7233", "ec2box":	  "ami-44956039",
+	  "splunk":   "ami-8b3ad6f6", "training": "ami-78829202",
+	  "proxy":    "ami-d02ec6ad", "otrs":	  "ami-9337dbee",
+	  "mail":     "ami-a0d23cdd", "idp":	  "ami-15da3168"
+	},
+	"team02" : { 
+	  "paloalto": "ami-493c7233", "ec2box":	  "ami-52af5a2f",
+	  "splunk":   "ami-8b3ad6f6", "training": "ami-78829202",
+	  "proxy":    "ami-d02ec6ad", "otrs":	  "ami-9337dbee",
+	  "mail":     "ami-a0d23cdd", "idp":	  "ami-75d03b08"
+	},
+	"team03" : { 
+	  "paloalto": "ami-493c7233", "ec2box":	  "ami-af9560d2",
+	  "splunk":   "ami-8b3ad6f6", "training": "ami-78829202",
+	  "proxy":    "ami-d02ec6ad", "otrs":	  "ami-9337dbee",
+	  "mail":     "ami-a0d23cdd", "idp":	  "ami-11d13a6c"
+	},
+	"team04" : { 
+	  "paloalto": "ami-493c7233", "ec2box":	  "ami-89a95cf4",
+	  "splunk":   "ami-8b3ad6f6", "training": "ami-78829202",
+	  "proxy":    "ami-d02ec6ad", "otrs":	  "ami-9337dbee",
+	  "mail":     "ami-a0d23cdd", "idp":	  "ami-e0d53e9d"
+	},
+	"team05" : { 
+	  "paloalto": "ami-493c7233", "ec2box":	  "ami-0b976276",
+	  "splunk":   "ami-8b3ad6f6", "training": "ami-78829202",
+	  "proxy":    "ami-d02ec6ad", "otrs":	  "ami-9337dbee",
+	  "mail":     "ami-a0d23cdd", "idp":	  "ami-d5d63da8"
+	},
+	"team06" : { 
+	  "paloalto": "ami-493c7233", "ec2box":	  "ami-94af5ae9",
+	  "splunk":   "ami-8b3ad6f6", "training": "ami-78829202",
+	  "proxy":    "ami-d02ec6ad", "otrs":	  "ami-9337dbee",
+	  "mail":     "ami-a0d23cdd", "idp":	  "ami-b22fc4cf"
+	},
+	"team07" : { 
+	  "paloalto": "ami-493c7233", "ec2box":	  "ami-e5926798",
+	  "splunk":   "ami-8b3ad6f6", "training": "ami-78829202",
+	  "proxy":    "ami-d02ec6ad", "otrs":	  "ami-9337dbee",
+	  "mail":     "ami-a0d23cdd", "idp":	  "ami-d025cead"
+	},
+	"team08" : { 
+	  "paloalto": "ami-493c7233", "ec2box":	  "ami-78926705",
+	  "splunk":   "ami-8b3ad6f6", "training": "ami-78829202",
+	  "proxy":    "ami-d02ec6ad", "otrs":	  "ami-9337dbee",
+	  "mail":     "ami-a0d23cdd", "idp":	  "ami-cf26cdb2"
+	},
+	"team09" : { 
+	  "paloalto": "ami-493c7233", "ec2box":	  "ami-77996c0a",
+	  "splunk":   "ami-8b3ad6f6", "training": "ami-78829202",
+	  "proxy":    "ami-d02ec6ad", "otrs":	  "ami-9337dbee",
+	  "mail":     "ami-a0d23cdd", "idp":	  "ami-5f3ad122"
+	},
+	"team10" : { 
+	  "paloalto": "ami-493c7233", "ec2box":	  "ami-54986d29",
+	  "splunk":   "ami-8b3ad6f6", "training": "ami-78829202",
+	  "proxy":    "ami-d02ec6ad", "otrs":	  "ami-9337dbee",
+	  "mail":     "ami-a0d23cdd", "idp":	  "ami-b23ad1cf"
+	},
+	"team11" : { 
+	  "paloalto": "ami-493c7233", "ec2box":	  "ami-7685700b",
+	  "splunk":   "ami-8b3ad6f6", "training": "ami-78829202",
+	  "proxy":    "ami-d02ec6ad", "otrs":	  "ami-9337dbee",
+	  "mail":     "ami-a0d23cdd", "idp":	  "ami-2e00eb53"
+	}
+      },
+      "PANFWRegionMap" : { "us-east-1" : { "AMI": "ami-493c7233" } },
+      "AZRegionMap" : { "us-east-1" : { "RegionAZ": "us-east-1a" } },
+      "AWSamiMap" : { "us-east-1" : { "AWSAMIwwwproxy": "ami-97785bed" } },
+      "JumpboxMap" : { "us-east-1" : { "AMI": "" } },
+      "UbuntuHelpDeskMap" : { "us-east-1" : { "AMI": "ami-66506c1c" } },
+      "UbuntuIDPMap" : { "us-east-1" : { "AMI": "ami-66506c1c" } },
+      "UbuntuTrainingMap" : { "us-east-1" : { "AMI": "ami-66506c1c" } }
+   },
+   
+   "Resources": {
+      "rSSMRole": {
+	 "Type": "AWS::IAM::Role",
+	 "Properties": {
+	    "AssumeRolePolicyDocument": {
+	       "Version" : "2012-10-17",
+	       "Statement": [ {
+		  "Effect": "Allow",
+		  "Principal": {
+		     "Service": [ "ec2.amazonaws.com" ]
+		  },
+		  "Action": [ "sts:AssumeRole" ]
+	       } ]
+	    },
+	    "Path": "/"
+	 }
+      },
+      "rSSMRolePolicies": {
+	 "Type": "AWS::IAM::Policy",
+	 "Properties": {
+	    "PolicyName": "root",
+	    "PolicyDocument": {
+	       "Version" : "2012-10-17",
+	       "Statement": [ {
+		  "Effect": "Allow",
+		  "Action": "*",
+		  "Resource": "*"
+	       } ]
+	    },
+	    "Roles": [ { "Ref": "rSSMRole" } ]
+	 }
+      },
+      "rSSMInstanceProfile": {
+	 "Type": "AWS::IAM::InstanceProfile",
+	 "Properties": {
+	    "Path": "/",
+	    "Roles": [ { "Ref": "rSSMRole" } ]
+	 }
+      },
+
+   
+      "rEIPrBastionHostInstance": {
+         "Type": "AWS::EC2::EIP",
+         "Properties": { "Domain": "vpc" }
+      },
+
+  
+      "rFWPublicNetworkInterface": {
+	"Type": "AWS::EC2::NetworkInterface",
+	"Properties": {
+	  "Description": "AWS FW1 E1/1",
+	  "SubnetId": {"Ref": "pPublicSubnet"},
+	  "SourceDestCheck": "false",
+	  "PrivateIpAddresses": [
+	    {
+	      "PrivateIpAddress": "10.0.0.100",
+	      "Primary": "true"
+	    }
+	  ],
+	  "GroupSet": [{"Ref": "pCompetitionSG"}],
+	  "Tags": [{"Key": "Name","Value": "FW Eth1/1"},{"Key": "paloalto","Value": "public"}]
+	}
+      },
+  
+      "rFWPrivateNetworkInterface": {
+	"Type": "AWS::EC2::NetworkInterface",
+	"Properties": {
+	  "Description": "AWS FW1 E1/2",
+	  "SubnetId": {"Ref": "pPrivateSubnet"},
+	  "SourceDestCheck": "false",
+	  "PrivateIpAddresses": [
+	    {
+	      "PrivateIpAddress": "10.0.1.11",
+	      "Primary": "true"
+	    }
+	  ],
+	  "GroupSet": [{"Ref": "pCompetitionPrivateSG"}],
+	  "Tags": [{"Key": "Name","Value": "FW Eth1/2"}]
+	}
+      },
+  
+      "rFWManagementEIPAssociation": {
+	"Type": "AWS::EC2::EIPAssociation",
+	"Properties": {
+	   "AllocationId": { "Fn::GetAtt": [ "rFwManagementIP", "AllocationId" ] },
+	   "NetworkInterfaceId": { "Ref": "rFWManagementNetworkInterface" }
+	},
+	"DependsOn": [ "rFWManagementNetworkInterface", "rFwManagementIP" ]
+      },
+  
+      "rFWPublicEIPAssociation": {
+	"Type": "AWS::EC2::EIPAssociation",
+	"Properties": {
+	  "AllocationId": { "Fn::GetAtt": [ "rFwPublicIP", "AllocationId" ] },
+	  "NetworkInterfaceId": { "Ref": "rFWPublicNetworkInterface" }
+	},
+	"DependsOn": [ "rFWPublicNetworkInterface", "rFwPublicIP" ]
+       },
+  
+      "rPrivateEIPAssociation": {
+	"Type": "AWS::EC2::EIPAssociation",
+	"Properties": {
+	  "EIP": { "Ref": "rFwPrivateIP" },
+	  "InstanceId": { "Ref": "rProxyInstance" }
+	},
+	"DependsOn": [
+	  "rProxyInstance",
+	  "rFwPrivateIP"
+	]
+      },
+    
+      "rRouteToFW": {
+	 "Type": "AWS::EC2::Route",
+	 "DependsOn" : "rFWInstance",
+	 "Properties": {
+	    "RouteTableId": { "Ref": "pRouteTablePrivate" },
+	    "NetworkInterfaceId": { "Ref": "rFWPrivateNetworkInterface" },
+	    "DestinationCidrBlock": "0.0.0.0/0"
+	 }
+      },
+  
+      "rFWInstance": {
+	"Type": "AWS::EC2::Instance",
+	"Properties": {
+	  "DisableApiTermination": "false",
+	  "InstanceInitiatedShutdownBehavior": "stop",
+	  "ImageId": { "Fn::FindInMap" : [ "InstanceMap", { "Ref" : "pTeamName" }, "paloalto" ] },
+	  "InstanceType": "c4.xlarge",
+	  "IamInstanceProfile": { "Ref": "rSSMInstanceProfile" },
+	  "BlockDeviceMappings": [
+	    {
+	      "DeviceName":"/dev/xvda",
+	      "Ebs": { "DeleteOnTermination":"true" }
+	    }
+	  ],
+	  "KeyName": { "Ref": "pKeyName" },
+	  "Monitoring": "false",
+	  "Tags": [{ "Key": "Name", "Value": "PANW VM-Series Firewall (V8.0.0)" },
+	    {"Key":"DNS","Value":{"Fn::Join" : [ ".", [ "gently", { "Ref": "pTeamName" }, { "Ref": "pEventDomain" } ] ]} },
+	    {"Key":"Type", "Value":"paloalto"}],
+	  "NetworkInterfaces": [
+	    {
+	      "NetworkInterfaceId": { "Ref": "rFWManagementNetworkInterface"},
+	      "DeviceIndex": 0
+	    },
+	    {
+	      "NetworkInterfaceId": { "Ref": "rFWPublicNetworkInterface"},
+	      "DeviceIndex": 1
+	    },
+	    {
+	      "NetworkInterfaceId": { "Ref": "rFWPrivateNetworkInterface"},
+	      "DeviceIndex": 2
+	    }
+	  ]
+	  },
+	"DependsOn": [ "rFWPublicNetworkInterface", "rFWPrivateNetworkInterface" ]
+      },
+
+      "rFwPublicIP": {
+	"Type" : "AWS::EC2::EIP",
+	"Properties" : { "Domain" : "vpc" }
+      },
+  
+      "rFwManagementIP": {
+	"Type" : "AWS::EC2::EIP",
+	"Properties" : { "Domain" : "vpc" }
+      },
+  
+      "rFwPrivateIP": {
+	"Type" : "AWS::EC2::EIP",
+	"Properties" : { "Domain" : "vpc" }
+      },
+  
+      "rFWManagementNetworkInterface": {
+	"Type": "AWS::EC2::NetworkInterface",
+	"Properties": {
+	  "Description": "AWS FW1 MGMT",
+	  "SubnetId": {"Ref": "pPublicSubnet"},
+	  "SourceDestCheck": "false",
+	  "PrivateIpAddresses": [
+	    {
+	      "PrivateIpAddress": "10.0.0.99",
+	      "Primary": "true"
+	    }
+	    ],
+	  "GroupSet": [{"Ref": "pCompetitionSG"}],
+	  "Tags": [{"Key": "Name","Value": "FW Eth0"}]
+	}
+      },
+  
+      "rProxyInstance": {
+	"Type": "AWS::EC2::Instance",
+	"Properties": {
+	  "DisableApiTermination": "false",
+	  "InstanceInitiatedShutdownBehavior": "stop",
+	  "ImageId": { "Fn::FindInMap" : [ "InstanceMap", { "Ref" : "pTeamName" }, "proxy" ] },
+	  "InstanceType": "t2.large",
+	  "IamInstanceProfile": { "Ref": "rSSMInstanceProfile" },
+	  "KeyName": { "Ref": "pKeyName" },
+	  "Monitoring": "false",
+	  "Tags": [
+	      {
+		  "Key": "Name",
+		  "Value": "AWS AMI:nginx proxy"
+	      },
+	      {
+		  "Key": "Type",
+		  "Value": "proxy"
+	      },
+	      {
+		  "Key": "PROXY",
+		  "Value": {"Fn::Join" : [ ".", [ "hammer", { "Ref": "pTeamName" }, { "Ref": "pEventDomain" } ] ]}
+	      }
+	  ],
+	  "NetworkInterfaces": [
+	    {
+	      "DeleteOnTermination": "true",
+	      "Description": "Primary network interface",
+	      "DeviceIndex": 0,
+	      "SubnetId": { "Ref": "pPrivateSubnet" },
+	      "PrivateIpAddresses": [
+		{
+		  "PrivateIpAddress": "10.0.1.101",
+		  "Primary": "true"
+		}
+	      ],
+	      "GroupSet": [ { "Ref": "pCompetitionPrivateSG" } ]
+	    }
+	  ],
+	  "UserData" : { "Fn::Base64" : { "Fn::Join" : ["", [
+	      "#!/bin/bash\n",
+	      { "Fn::Base64" : { "Fn::Join" : ["", [
+		"wget https://s3.amazonaws.com/wildeagle-team",
+		{ "Ref": "pTeamName" }, 
+		"/fullchain1.pem > /etc/nginx/fullchain.pem\n" ]]}},
+	      { "Fn::Base64" : { "Fn::Join" : ["", [
+		"wget https://s3.amazonaws.com/wildeagle-team",
+		{ "Ref": "pTeamName" }, 
+		"/privkey1.pem > /etc/nginx/privkey.pem\n" ]]}}
+	      ]]}
+	  }
+	}
+      },
+
+      "rSplunkInstance": {
+	"Type": "AWS::EC2::Instance",
+	"Properties": {
+	  "DisableApiTermination": "false",
+	  "InstanceInitiatedShutdownBehavior": "stop",
+	  "ImageId": { "Fn::FindInMap" : [ "InstanceMap", { "Ref" : "pTeamName" }, "splunk" ] },
+	  "InstanceType": "t2.large",
+	  "IamInstanceProfile": { "Ref": "rSSMInstanceProfile" },
+	  "KeyName": { "Ref": "pKeyName" },
+	  "Monitoring": "false",
+	  "Tags": [
+	      {
+		  "Key": "Name",
+		  "Value": "public:splunk logger"
+	      },
+	      {
+		  "Key": "Type",
+		  "Value": "splunk"
+	      },
+	      {
+		  "Key": "DNS",
+		  "Value": {"Fn::Join" : [ ".", [ "dupin", { "Ref": "pTeamName" }, { "Ref": "pEventDomain" } ] ]}
+	      }
+	  ],
+	  "NetworkInterfaces": [
+	    {
+	      "AssociatePublicIpAddress": true,
+	      "DeleteOnTermination": "true",
+	      "Description": "Primary network interface",
+	      "DeviceIndex": 0,
+	      "SubnetId": { "Ref": "pPublicSubnet" },
+	      "PrivateIpAddresses": [
+		{
+		  "PrivateIpAddress": "10.0.0.103",
+		  "Primary": "true"
+		}
+	      ],
+	      "GroupSet": [ { "Ref": "pCompetitionSG" } ]
+	    }
+	  ],
+	  "UserData" : { "Fn::Base64" : { "Fn::Join" : ["", [
+	      "#!/bin/bash\n",
+		"apt-get -y update\n",
+		"cd /tmp\n",
+		"wget https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/debian_amd64/amazon-ssm-agent.deb\n",
+		"dpkg -i amazon-ssm-agent.deb\n",
+		"systemctl enable amazon-ssm-agent\n"
+	      ]]}
+	  }
+	}
+      },
+
+      "rPublicJumpboxInstance": {
+	 "Type": "AWS::EC2::Instance",
+	 "Properties": {
+	    "ImageId": { "Fn::FindInMap" : [ "InstanceMap", { "Ref" : "pTeamName" }, "ec2box" ] },
+	    "InstanceType": "t2.large",
+	    "IamInstanceProfile": { "Ref": "rSSMInstanceProfile" },
+	    "KeyName": { "Ref": "pKeyName" },
+	    "Tags": [
+	       {
+		  "Key": "Name",
+		  "Value": "Public Jump Server"
+	       },
+	       {
+		  "Key": "Type",
+		  "Value": "jumpbox"
+		},
+		{
+		  "Key": "DNS",
+		  "Value": {"Fn::Join" : [ ".", [ "brown", { "Ref": "pTeamName" }, { "Ref": "pEventDomain" } ] ]}
+		}
+	    ],
+	    "NetworkInterfaces": [
+	      {
+		"AssociatePublicIpAddress": true,
+		"DeleteOnTermination": "true",
+		"Description": "Primary network interface",
+		"DeviceIndex": 0,
+		"SubnetId": { "Ref": "pPublicSubnet" },
+		"PrivateIpAddresses": [
+		  {
+		    "PrivateIpAddress": "10.0.0.102",
+		    "Primary": "true"
+		  }
+		],
+		"GroupSet": [ { "Ref": "pCompetitionSG" } ]
+	      }
+	    ],
+	    "UserData" : { "Fn::Base64" : { "Fn::Join" : ["", [
+		"#!/bin/bash\n",
+		"apt-get -y update\n",
+		"cd /tmp\n",
+		"wget https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/debian_amd64/amazon-ssm-agent.deb\n",
+		"dpkg -i amazon-ssm-agent.deb\n",
+		"systemctl enable amazon-ssm-agent\n",
+		"wget https://s3.amazonaws.com/wildeagle-team05/team05.pem > /home/ubuntu/.ssh/id_rsa\n"
+		]]}
+	    }
+  
+	 }
+      },
+
+      "rHelpDeskInstance": {
+	 "Type": "AWS::EC2::Instance",
+	 "Properties": {
+	    "ImageId": { "Fn::FindInMap" : [ "InstanceMap", { "Ref" : "pTeamName" }, "otrs" ] },
+	    "InstanceType": "t2.large",
+	    "IamInstanceProfile": { "Ref": "rSSMInstanceProfile" },
+	    "KeyName": { "Ref": "pKeyName" },
+	    "Tags": [
+	       {
+		  "Key": "Name",
+		  "Value": "Helpdesk Server"
+	       },
+	       {
+		  "Key": "Type",
+		  "Value": "helpdesk"
+		},
+		{
+		  "Key": "PROXY",
+		  "Value": {"Fn::Join" : [ ".", [ "cao", { "Ref": "pTeamName" }, { "Ref": "pEventDomain" } ] ]}
+		}
+	    ],
+	    "NetworkInterfaces": [
+	      {
+		"DeleteOnTermination": "true",
+		"Description": "Primary network interface",
+		"DeviceIndex": 0,
+		"SubnetId": { "Ref": "pPrivateSubnet" },
+		"PrivateIpAddresses": [
+		  {
+		    "PrivateIpAddress": "10.0.1.103",
+		    "Primary": "true"
+		  }
+		],
+		"GroupSet": [ { "Ref": "pCompetitionPrivateSG" } ]
+	      }
+	    ],
+	    "UserData" : { "Fn::Base64" : { "Fn::Join" : ["", [
+		"#!/bin/bash\n",
+		"apt-get -y update\n",
+		"cd /tmp\n",
+		"wget https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/debian_amd64/amazon-ssm-agent.deb\n",
+		"dpkg -i amazon-ssm-agent.deb\n",
+		"systemctl enable amazon-ssm-agent\n"
+		]]}
+	    }
+
+	 }
+      },
+     
+      "rMailInstance": {
+	"Type": "AWS::EC2::Instance",
+	"Properties": {
+	  "DisableApiTermination": "false",
+	  "InstanceInitiatedShutdownBehavior": "stop",
+	  "ImageId": { "Fn::FindInMap" : [ "InstanceMap", { "Ref" : "pTeamName" }, "mail" ] },
+	  "InstanceType": "t2.large",
+	  "IamInstanceProfile": { "Ref": "rSSMInstanceProfile" },
+	  "KeyName": { "Ref": "pKeyName" },
+	  "Monitoring": "false",
+	  "Tags": [
+	      {
+		  "Key": "Name",
+		  "Value": "Mail Server"
+	      },
+	      {
+		  "Key": "Type",
+		  "Value": "mail"
+	      },
+	      {
+		  "Key": "PROXY",
+		  "Value": {"Fn::Join" : [ ".", [ "mason", { "Ref": "pTeamName" }, { "Ref": "pEventDomain" } ] ]}
+	      }
+	  ],
+	  "NetworkInterfaces": [
+	    {
+	      "DeleteOnTermination": "true",
+	      "Description": "Primary network interface",
+	      "DeviceIndex": 0,
+	      "SubnetId": { "Ref": "pPrivateSubnet" },
+	      "PrivateIpAddresses": [
+		{
+		  "PrivateIpAddress": "10.0.1.104",
+		  "Primary": "true"
+		}
+	      ],
+	      "GroupSet": [ { "Ref": "pCompetitionPrivateSG" } ]
+	    }
+	  ],
+	  "UserData" : { "Fn::Base64" : { "Fn::Join" : ["", [
+	      "#!/bin/bash\n",
+	      "apt-get -y update\n",
+	      "apt-get -y install nginx\n",
+	      "cd /etc/nginx\n",
+	      "service nginx start\n",
+	      "cd /tmp\n",
+	      "wget https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/debian_amd64/amazon-ssm-agent.deb\n",
+	      "dpkg -i amazon-ssm-agent.deb\n",
+	      "systemctl enable amazon-ssm-agent\n"
+	      ]]}
+	  }
+	}
+      },
+      
+      "rIDPInstance": {
+	"Type": "AWS::EC2::Instance",
+	"Properties": {
+	  "DisableApiTermination": "false",
+	  "InstanceInitiatedShutdownBehavior": "stop",
+	  "ImageId": { "Fn::FindInMap" : [ "InstanceMap", { "Ref" : "pTeamName" }, "idp" ] },
+	  "InstanceType": "t2.xlarge",
+	  "IamInstanceProfile": { "Ref": "rSSMInstanceProfile" },
+	  "KeyName": { "Ref": "pKeyName" },
+	  "Monitoring": "false",
+	  "Tags": [
+	      {
+		  "Key": "Name",
+		  "Value": "Identity Provider"
+	      },
+	      {
+		  "Key": "Type",
+		  "Value": "idp"
+	      },
+	      {
+		  "Key": "PROXY",
+		  "Value": {"Fn::Join" : [ ".", [ "spade", { "Ref": "pTeamName" }, { "Ref": "pEventDomain" } ] ]}
+	      }
+	  ],
+	  "NetworkInterfaces": [
+	    {
+	      "AssociatePublicIpAddress": true,
+	      "DeleteOnTermination": "true",
+	      "Description": "Primary network interface",
+	      "DeviceIndex": 0,
+	      "SubnetId": { "Ref": "pPublicSubnet" },
+	      "PrivateIpAddresses": [
+		{
+		  "PrivateIpAddress": "10.0.0.105",
+		  "Primary": "true"
+		}
+	      ],
+	      "GroupSet": [ { "Ref": "pCompetitionSG" } ]
+	    }
+	  ],
+	  "UserData" : { "Fn::Base64" : { "Fn::Join" : ["", [
+	      "#!/bin/bash\n",
+	      "cd /tmp\n",
+	      "wget https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/debian_amd64/amazon-ssm-agent.deb\n",
+	      "dpkg -i amazon-ssm-agent.deb\n",
+	      "systemctl enable amazon-ssm-agent\n"
+	      ]]}
+	  }
+	}   
+    },
+
+    "rTrainingInstance": {
+	"Type": "AWS::EC2::Instance",
+	"Properties": {
+	  "DisableApiTermination": "false",
+	  "InstanceInitiatedShutdownBehavior": "stop",
+	  "ImageId": { "Fn::FindInMap" : [ "InstanceMap", { "Ref" : "pTeamName" }, "training" ] },
+	  "InstanceType": "t2.large",
+	  "IamInstanceProfile": { "Ref": "rSSMInstanceProfile" },
+	  "KeyName": { "Ref": "pKeyName" },
+	  "Monitoring": "false",
+	  "Tags": [
+	      {
+		  "Key": "Name",
+		  "Value": "Training"
+	      },
+	      {
+		  "Key": "Type",
+		  "Value": "idp"
+	      },
+	      {
+		  "Key": "PROXY",
+		  "Value": {"Fn::Join" : [ ".", [ "poirot", { "Ref": "pTeamName" }, { "Ref": "pEventDomain" } ] ]}
+	      }
+	  ],
+	  "NetworkInterfaces": [
+	    {
+	      "DeleteOnTermination": "true",
+	      "Description": "Primary network interface",
+	      "DeviceIndex": 0,
+	      "SubnetId": { "Ref": "pPrivateSubnet" },
+	      "PrivateIpAddresses": [
+		{
+		  "PrivateIpAddress": "10.0.1.106",
+		  "Primary": "true"
+		}
+	      ],
+	      "GroupSet": [ { "Ref": "pCompetitionPrivateSG" } ]
+	    }
+	  ],
+	  "UserData" : { "Fn::Base64" : { "Fn::Join" : ["", [
+	      "#!/bin/bash\n"
+	      ]]}
+	  }
+	}
+      }
+    },
+
+
+ 
+    "Outputs": {
+      "FirewallManagementURL": {
+	"Description": "VM-Series management interface URL",
+	"Value": { "Fn::Join" : ["", [
+	    "https://",
+	  { "Fn::GetAtt": [ "rFWInstance", "PublicIp" ]}
+	]]}
+      },
+      "FirewallManagementEIP": {
+	"Description": "VM-Series management interface EIP",
+	"Value": { "Fn::GetAtt": [ "rFWInstance", "PublicIp" ]}
+      },
+      "rFwPublicIP": {
+	"Description": "Public IP of data interface",
+	"Value": { "Ref": "rFwPublicIP" }
+      },
+      "rFwPrivateIP": {
+	"Description": "Private IP",
+	"Value": { "Ref": "rFwPrivateIP" }
+      }
+    }
+}

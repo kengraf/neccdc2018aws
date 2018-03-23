@@ -1,0 +1,57 @@
+# FILENAME
+# scoring_engine_install_playbook.yml
+#
+# DESCRIPTION
+# Deploys CCDC scoring engine for UNH NECCDC 2018
+# 
+# REQUIREMENTS
+# 
+# Ubuntu 16.04; 
+#
+# SETUP - Confirm proper SSH access to target host as root
+# apt install ssh
+# cp /usr/bin/python3 /usr/bin/python
+# ssh-keygen -f "/home/ken/.ssh/known_hosts" -R "10.0.1.106"
+# ssh-copy-id csc@<target>
+# cp -r /home/csc/.ssh /root/.ssh
+#
+---
+- hosts: scoring_engine
+  remote_user: root
+  gather_facts: False
+
+  tasks:
+    - name: Bring OS up to date with required packages for {{ play_hosts }}
+      shell: |
+        apt update --fix-missing
+
+    - name: Add GLUU repo
+      lineinfile:
+        line: deb https://repo.gluu.org/ubuntu/ xenial main'
+        path: /etc/apt/sources.list.d/gluu-repo.list
+        
+    - name: Retrieve GLUU repo key
+        get_url: 
+          url: https://repo.gluu.org/ubuntu/gluu-apt.key
+          dest: gluu-apt.key
+          
+    - name: Apply repo key
+        shell: apt-key add gluu-apt.key 
+
+    - name: Install GLUU (update and restart needed?)
+        shell: apt -y install gluu-server-3.1.1
+
+    - name: Start GLUU service
+        shell: |
+          service gluu-server-3.1.1 start
+          service gluu-server-3.1.1 login 
+
+    - name: Apply repo key
+    fix - file to hold settings
+        shell: |
+          cd /install/community-edition-setup
+          ./setup.py
+
+    - name: Apply repo key
+        shell: rm /etc/apt/source.list.d/gluu-repo.list
+

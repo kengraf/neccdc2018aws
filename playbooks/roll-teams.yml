@@ -1,0 +1,31 @@
+#
+# ansible-playbook  --extra-vars "play=setup-team.yml"
+#
+# First time specify play=setup_team.yml (IAM/keys/etc)
+# Therefater the default create-team-stack.yml
+#
+---
+- hosts: localhost
+  connection: local
+  gather_facts: False
+
+  vars:
+    action: "{{ command | default('create-team-stack.yml') }}"
+    
+  tasks:
+      
+  - name: Create stack
+      command: ansible-playbook {{ action }} --extra-vars "team={{ item.team }}, school={{ item.school }}"
+      async: 900
+      poll: 0
+      loop: 
+        - { team: 'team01', school: 'unh' }
+#        - { team: 'team02', school: 'bu' }
+      register: teams
+      
+    - name: Wait for team creation to complete
+      async_status: jid={{ item.ansible_job_id }}
+      register: event_jobs
+      until: event_jobs.finished
+      retries: 300
+      loop: "{{ teams.results }}"

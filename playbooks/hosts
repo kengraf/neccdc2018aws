@@ -1,0 +1,36 @@
+localhost ansible_connection=local
+
+# Target
+#
+[scoring_engine]
+scoring.wildeagle.net  ansible_ssh_private_key_file=~/Dropbox/AWS/NECCDC.pem
+
+[local_desktop_1]
+10.1.[01:10].6
+
+[www-proxy]
+hammer.team[01:11].wildeagle.net
+
+[paloalto]
+gently.team[01:11].wildeagle.net
+
+[jumpbox]
+brown.team[01:11].wildeagle.net
+
+[training]
+poirot.team[01:11].wildeagle.net
+
+[mail]
+mason.team[01:11].wildeagle.net
+
+[gluu]
+spade.team[01:11].wildeagle.net
+
+[otrs]
+cao.team[01:11].wildeagle.net
+
+[splunk]
+dupin.team[01:11].wildeagle.net
+
+
+

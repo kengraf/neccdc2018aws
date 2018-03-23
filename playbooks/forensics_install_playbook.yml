@@ -1,0 +1,77 @@
+# FILENAME
+# forensics_install_playbook.yml
+#
+# DESCRIPTION
+# Deploys forensics (SIFT workstation) for UNH NECCDC 2018
+# 
+# REQUIREMENTS
+# 
+# Ubuntu 16.04; 
+#
+# SETUP - Confirm proper SSH access to target host as root
+# apt install ssh
+# cp /usr/bin/python3 /usr/bin/python
+# ssh-keygen -f "~/.ssh/known_hosts" -R "10.0.1.106"
+# ssh-copy-id csc@<target>
+# cp -r ~/.ssh /root/.ssh
+#
+---
+- hosts: scoring_engine
+  remote_user: root
+  gather_facts: False
+
+  tasks:
+    - name: Bring OS up to date with required packages for {{ play_hosts }}
+      shell: |
+        apt update --fix-missing
+
+    - name: Add group
+      group:
+        name: sift
+      
+    - name: Add sift user
+      user:
+        name: sift
+        group: sift
+        createhome: yes
+        skeleton: yes
+
+    - name: Set default password
+      shell: echo "sift:Neccdc-2018" | sudo chpasswd
+        
+    - name: Add sift to sudo group
+      shell: usermod -aG sudo sift
+      
+    - name: Add sift to sudoers
+      lineinfile:
+        line: 'sift ALL=(ALL:ALL) NOPASSWD: ALL' 
+        path: /etc/sudoers
+        
+    - name: Retrieve hash
+      get_url:
+        url: https://github.com/sans-dfir/sift-cli/releases/download/v1.5.1/sift-cli-linux.sha256.asc
+        dest: ./sift-cli-linux.sha256.asc
+      
+    - name: Retrieve SIFT install
+      get_url:
+        url: https://github.com/sans-dfir/sift-cli/releases/download/v1.5.1/sift-cli-linux
+        dest: ./sift-cli-linux
+      
+    - name: Retrieve GPG keys
+      shell: gpg --keyserver pgp.mit.edu --recv-keys 22598A94
+      
+    - name: Validate download
+      shell: |
+        gpg --verify sift-cli-linux.sha256.asc
+        shasum -a 256 -c sift-cli-linux.sha256.asc
+        
+    - name: Setup install
+      shell: |
+        mv sift-cli-linux /usr/local/bin/sift
+        chmod 755 /usr/local/bin/sift
+    
+    - name: Install SIFT
+      shell: sudo sift install --user=sift
+      become: yes
+      become_user: sift
+      

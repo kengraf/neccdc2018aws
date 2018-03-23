@@ -1,0 +1,41 @@
+# 
+# REQUIREMENTS
+# Default AWS credentials have access to manage new hosted zone
+#
+# EXECUTE
+# ansible-playbook ./playbooks/initialize_dns.yml
+#
+---
+- hosts: localhost
+  connection: local
+  gather_facts: False
+  vars_files:
+    - event-vars.yml
+
+  tasks:
+    - name: Create hosted zone
+      route53_zone: 
+        aws_access_key: "{{ access_key_id }}"
+        aws_secret_key: "{{ secret_access_key }}"
+        zone: '{{ item }}.neccdc2018.org'
+        state: present
+        comment: 'Created by team setup'
+      register: zone_out
+      with_sequence: start=1 end=11 format=team%02d
+              
+    - debug: var=zone_out
+
+    - name: Set NS records\
+      route53:
+        aws_access_key: "{{ access_key_id }}"
+        aws_secret_key: "{{ secret_access_key }}"
+        state: present
+        zone: 'neccdc2018.org'
+        record: '{{ item }}.neccdc2018.org'
+        type: NS
+        value: "ns-439.awsdns-54.com., ns-1136.awsdns-14.org., ns-1993.awsdns-57.co.uk., ns-1003.awsdns-61.net."
+        overwrite: yes
+      register: zone_out
+      with_sequence: start=1 end=11 format=team%02d
+
+    - debug: var=zone_out

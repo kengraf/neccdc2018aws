@@ -1,0 +1,274 @@
+{
+   "AWSTemplateFormatVersion": "2010-09-09",
+   "Description": "Provides S3 buckets, S3 Policies, Security Groups, and related resources",
+    "Metadata" : {
+        "Stack" : {"Value" : "3"},
+        "VersionDate" : { "Value" : "09302017" },
+        "Identifier" : { "Value" : "stack3-resources" },
+        "Input" : { "Description" : "VPC, SubnetIDs, S3 bucket names, CIDR blocks" },
+        "Output" : { "Description" : "Outputs ID of all deployed resources" }
+    },
+   "Parameters": {
+      "pVpcCIDR": {
+	 "Description": "CIDR block for Blue Team VPC",
+	 "Type": "String"
+      },
+      "pWhiteCIDR": {
+	 "Description": "CIDR block for Blue Team access",
+	 "Type": "String"
+      },
+      "pCampusCIDR": {
+	 "Description": "CIDR block for White Team access",
+	 "Type": "String"
+      },
+      "pBlueTeamVPC": {
+         "Description": "Blue Team VPC",
+         "Type": "String"
+      },
+      "pPublicSubnet": {
+         "Description": "PublicSubnet",
+         "Type": "String"
+      },
+      "pPrivateSubnet" : {
+         "Description": "PrivateSubnet",
+         "Type": "String"
+      },
+      "pS3WebContentBucketName": {
+         "Description": "Name of S3 Bucket to use for web content (optional)",
+         "Type": "String"
+      },
+      "pS3AppLogsBucketName": {
+         "Description": "Name of S3 Bucket to use for application logs (optional)",
+         "Type": "String"
+      },
+      "pS3BackupBucketName": {
+         "Description": "Name of S3 Bucket to use for backup/DR data (optional)",
+         "Type": "String"
+      }
+   },
+   "Conditions" : {
+        "cCreateAppLogsBucket" : {
+		"Fn::Not" : [ {
+                "Fn::Equals" : [ { "Ref" : "pS3AppLogsBucketName" }, "false"]
+		} ]
+        },
+        "cCreateWebContentBucket" : {
+                "Fn::Not" : [ {
+                "Fn::Equals" : [ { "Ref" : "pS3WebContentBucketName" }, "false"]
+		} ]
+        },
+
+        "cCreateBackupBucket" : {
+                "Fn::Not" : [ {
+                "Fn::Equals" : [ { "Ref" : "pS3BackupBucketName" }, "false"]
+		} ]
+        }
+   },
+   "Resources": {
+      "rCompetitionPrivateSG": {
+	 "Type": "AWS::EC2::SecurityGroup",
+	 "Properties": {
+	    "GroupDescription": "Allow all traffic between all AWS instances",
+	    "VpcId": {
+	       "Ref": "pBlueTeamVPC"
+	    },
+	    "Tags": [
+	       {
+		  "Key": "Name",
+		  "Value" : "CompetitionPrivateSG"
+	       }
+	    ], 
+	    "SecurityGroupIngress": [
+	       {
+		  "IpProtocol": "-1",
+		  "CidrIp": "10.0.0.0/8"
+	       }
+	    ],
+	    "SecurityGroupEgress": [
+	       {
+		  "IpProtocol": "-1",
+		  "CidrIp": "0.0.0.0/0"
+	       }
+	    ]
+	 }
+      },
+
+
+      "rCompetitionSG": {
+         "Type": "AWS::EC2::SecurityGroup",
+         "Properties": {
+            "GroupDescription": "Restrict to traffic from team campus",
+            "VpcId": {
+               "Ref": "pBlueTeamVPC"
+            },
+	    "Tags": [
+	       {
+		  "Key": "Name",
+		  "Value" : "CompetitionScoredSG"
+	       }
+	    ], 
+            "SecurityGroupIngress": [
+               {
+                  "IpProtocol": "-1",
+                  "CidrIp": { "Ref" : "pWhiteCIDR"}
+               },
+	       {
+ 		  "IpProtocol": "-1",
+		  "CidrIp": "10.0.0.0/8"
+	       },
+	       {
+		  "IpProtocol": "-1",
+		  "CidrIp": { "Ref" : "pCampusCIDR"}
+	       }
+
+            ],
+            "SecurityGroupEgress": [
+               {
+                  "IpProtocol": "-1",
+                  "CidrIp": "0.0.0.0/0"
+               }
+            ]
+         }
+      },
+
+      "rWebContentBucket": {
+         "Type": "AWS::S3::Bucket",
+	 "Condition" : "cCreateWebContentBucket",
+         "Properties": {
+            "AccessControl": "Private",
+            "BucketName": {
+               "Ref": "pS3WebContentBucketName"
+            }
+         },
+         "DeletionPolicy": "Retain"
+      },
+      "rWebContentS3Policy": {
+         "Type": "AWS::S3::BucketPolicy",
+         "Condition" : "cCreateWebContentBucket",
+         "DependsOn": "rWebContentBucket",
+         "Properties": {
+            "Bucket": {
+               "Ref": "rWebContentBucket"
+            },
+            "PolicyDocument": {
+               "Statement": [
+                  {
+                     "Action": "s3:*",
+                     "Effect": "Deny",
+                     "Principal": "*",
+                     "Resource": {
+                        "Fn::Join": [
+                           "",
+                           [
+                              "arn:aws:s3:::",
+                              {
+                                 "Ref": "pS3WebContentBucketName"
+                              },
+                              "/*"
+                           ]
+                        ]
+                     },
+                     "Condition": {
+                        "Bool": {
+                           "aws:SecureTransport": false
+                        }
+                     }
+                  }
+               ]
+            }
+         }
+      },
+      "rBackupBucket": {
+         "Type": "AWS::S3::Bucket",
+	 "Condition" : "cCreateBackupBucket",
+         "Properties": {
+            "AccessControl": "Private",
+            "BucketName": {
+               "Fn::Join": [
+                  "",
+                  [
+                     {
+                        "Ref": "pS3BackupBucketName"
+                     },
+                     "-",
+                     {
+                        "Ref": "AWS::AccountId"
+                     }
+                  ]
+               ]
+            }
+         },
+         "DeletionPolicy": "Delete"
+      },
+      "rAppLogsBucket": {
+         "Type": "AWS::S3::Bucket",
+	 "Condition" :  "cCreateAppLogsBucket",
+         "Properties": {
+            "AccessControl": "Private",
+            "BucketName": {
+               "Fn::Join": [
+                  "",
+                  [
+                     {
+                        "Ref":  "pS3AppLogsBucketName"
+                     },
+                     "-",
+                     {
+                        "Ref": "AWS::AccountId"
+                     }
+                  ]
+               ]
+            }
+         },
+         "DeletionPolicy": "Delete"
+      },
+      "rWebContentS3PolicySSE": {
+         "Type": "AWS::S3::BucketPolicy",
+	 "Condition" : "cCreateWebContentBucket",
+         "DependsOn": "rWebContentS3Policy",
+         "Properties": {
+            "Bucket": {
+               "Ref": "rWebContentBucket"
+            },
+            "PolicyDocument": {
+               "Statement": [
+                  {
+                     "Effect": "Deny",
+                     "Principal": "*",
+                     "Action": "s3:PutObject",
+                     "Resource": {
+                        "Fn::Join": [
+                           "",
+                           [
+                              "arn:aws:s3:::",
+                              {
+                                 "Ref": "pS3WebContentBucketName"
+                              },
+                              "/*"
+                           ]
+                        ]
+                     },
+                     "Condition": {
+                        "StringNotEquals": {
+                           "s3:x-amz-server-side-encryption": "AES256"
+                        }
+                     }
+                  }
+               ]
+            }
+         }
+      }
+   },
+   "Outputs": {
+      "rCompetitionPrivateSG": {
+	 "Value": {
+	    "Ref": "rCompetitionPrivateSG"
+	 }
+      },
+      "rCompetitionSG": {
+         "Value": {
+            "Ref": "rCompetitionSG"
+         }
+      }
+   }
+}

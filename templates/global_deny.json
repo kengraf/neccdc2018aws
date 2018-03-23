@@ -1,0 +1,179 @@
+
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Deny",
+      "Action": [
+        "ec2:AcceptVpcPeeringConnection",
+        "ec2:AssociateDhcpOptions",
+        "ec2:AssociateRouteTable",
+        "ec2:AttachClassicLinkVpc",
+        "ec2:AttachInternetGateway",
+        "ec2:AttachVpnGateway",
+        "ec2:CreateCustomerGateway",
+        "ec2:CreateDhcpOptions",
+        "ec2:CreateInternetGateway",
+        "ec2:CreateNatGateway",
+        "ec2:CreateNetworkAcl*",
+        "ec2:CreateRoute*",
+        "ec2:CreateSubnet",
+        "ec2:CreateVpc*",
+        "ec2:CreateVpn*",
+        "ec2:DeleteCustomerGateway",
+        "ec2:DeleteDhcpOptions",
+        "ec2:DeleteFlowLogs",
+        "ec2:DeleteInternetGateway",
+        "ec2:DeleteNatGateway",
+        "ec2:DeleteNetworkAcl*",
+        "ec2:DeleteRoute",
+        "ec2:DeleteRouteTable",
+        "ec2:DeleteSubnet",
+        "ec2:DeleteVpc*",
+        "ec2:DeleteVpn*",
+        "ec2:DetachClassicLinkVpc",
+        "ec2:DetachInternetGateway",
+        "ec2:DetachVpnGateway",
+        "ec2:DisableVgwRoutePropagation",
+        "ec2:DisableVpcClassicLink",
+        "ec2:DisassociateRouteTable",
+        "ec2:EnableVgwRoutePropagation",
+        "ec2:EnableVpcClassicLink",
+        "ec2:ModifySubnetAttribute",
+        "ec2:ModifyVpc*",
+        "ec2:RejectVpcPeeringConnection",
+        "ec2:ReplaceNetworkAclAssociation",
+        "ec2:ReplaceNetworkAclEntry",
+        "ec2:ReplaceRoute",
+        "ec2:ReplaceRouteTableAssociation",
+        "ec2:RestoreAddressToClassic",
+        "iam:CreateLoginProfile"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Deny",
+      "Action": [
+        "cloudformation:CreateStack",
+        "cloudformation:DeleteStack",
+        "cloudformation:UpdateStack"
+      ],
+      "Resource": [
+        "arn:aws:cloudformation:*:*:stack/NECCDC2018*"
+      ]
+    },
+    {
+      "Effect": "Deny",
+      "NotAction": [
+        "iam:Get*",
+        "iam:List*"
+      ],
+      "Resource": [
+        "arn:aws:iam::*:user/NECCDC2018*",
+        "arn:aws:iam::*:role/NECCDC2018*"
+      ]
+    },
+    {
+      "Effect": "Deny",
+      "Action": "s3:Delete*",
+      "Resource": "arn:aws:s3:::neccdc2018-*"
+    },
+    {
+      "Effect": "Deny",
+      "NotAction": [
+        "s3:List*",
+        "s3:Get*",
+        "s3:PutBucketNotification",
+        "s3:PutObject*",
+        "s3:Abort*"
+      ],
+      "Resource": [
+        "arn:aws:s3:::neccdc2018-*-access-logs-*/*",
+        "arn:aws:s3:::neccdc2018-*-access-logs-*"
+      ]
+    },
+    {
+      "Effect": "Deny",
+      "NotAction": [
+        "s3:List*",
+        "s3:Get*"
+      ],
+      "Resource": [
+        "arn:aws:s3:::neccdc2018*/*",
+        "arn:aws:s3:::neccdc2018*"
+      ]
+    },
+
+    {
+      "Effect": "Deny",
+      "Action": [
+        "sns:*"
+      ],
+      "Resource": [
+        "arn:aws:sns:*:*:neccdc2018*"
+      ]
+    },
+    {
+      "Effect": "Deny",
+      "Action": [
+         "ec2:*"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringLike": {
+          "ec2:ResourceTag/Name": [
+            "neccdc2018*"
+          ]
+        }
+      }
+    },
+    {
+      "Effect": "Deny",
+      "Action": [
+        "lambda:AddPermission",
+        "lambda:Create*",
+        "lambda:Delete*",
+        "lambda:Invoke*",
+        "lambda:PublishVersion",
+        "lambda:RemovePermission",
+        "lambda:Update*"
+      ],
+      "Resource": [
+        "arn:aws:lambda:*:*:function:neccdc2018*"
+      ]
+    },
+    {
+      "Effect": "Deny",
+      "Action": "events:*",
+      "Resource": [
+        "arn:aws:events:*:*:rule/neccdc2018*"
+      ]
+    },
+    {
+      "Effect": "Deny",
+      "Action": [
+        "cloudtrail:DeleteTrail",
+        "cloudtrail:RemoveTags",
+        "cloudtrail:StopLogging",
+        "cloudtrail:UpdateTrail",
+        "config:Delete*",
+        "config:Put*",
+        "config:StartConfigurationRecorder",
+        "config:StopConfigurationRecorder",
+        "directconnect:Delete*",
+        "directconnect:Allocate*",
+        "directconnect:Create*",
+        "directconnect:Confirm*",
+        "aws-portal:Modify*",
+        "route53domains:Register*",
+        "route53domains:Transfer*",
+        "workdocs:*",
+        "workmail:*"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+
+ 
+ 

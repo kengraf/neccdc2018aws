@@ -1,0 +1,122 @@
+# DESCRIPTION
+# Using SSM; execute a set commands on instance
+# 
+# REQUIREMENTS
+# 
+# pip install boto3
+# pip install botocore
+# pip install ansible
+#
+# EXECUTE
+#
+# This playbook will use default AWS credentials if a team/school name is not provided;
+# this option is provided for the black team to push multiple environments
+# Required var: machine=[friendly ami name]
+# Optional vars:  team=team[00-99] campus=[edu domain]
+#
+# Good practice: Passwords should NOT be provided in cleartext. They should be edited and encrypted using:
+# ansible-vault encrypt firewall-secrets.yml
+#
+# ansible-playbook ./playbooks/create-instance.yml  --extra-vars "machine=XXX"
+#
+---
+- hosts: localhost
+  connection: local
+  gather_facts: False
+
+  vars_files:
+    - event-vars.yml
+    
+  tasks:
+  
+    - name: Retrieve competition VPC id
+      ec2_vpc_net_facts:
+        aws_access_key: "{{ access_key_id }}"
+        aws_secret_key: "{{ secret_access_key }}"
+        region: "us-east-1"
+        filters:
+          "tag:Name": "BlueTeamVPC"
+      register: vpc_facts
+
+    - debug:
+        msg: "{{ vpc_facts }}"
+        
+    - set_fact:
+        vpc_id: "{{ vpc_facts.vpcs[0].id }}" 
+    
+    - debug:
+        msg: "{{ vpc_id }}" 
+        
+    - name: Retrieve private subnet id
+      ec2_vpc_subnet_facts:
+        aws_access_key: "{{ access_key_id }}"
+        aws_secret_key: "{{ secret_access_key }}"
+        filters:
+          vpc-id: "{{ vpc_facts.vpcs[0].id }}" 
+          "tag:Name": "{{ subnet_name }}"
+      register: subnet_facts
+    
+    - set_fact:
+        subnet_id: "{{ subnet_facts.subnets[0].id }}" 
+       
+    - debug:
+        msg: "{{ subnet_id }}" 
+        
+    - name: Retrieve security group id
+      ec2_group_facts:
+        aws_access_key: "{{ access_key_id }}"
+        aws_secret_key: "{{ secret_access_key }}"
+        filters:
+          "tag:Name": CompetitionScoredSG
+      register: sg_facts
+    
+    - set_fact:
+        sg_id: "{{ sg_facts.security_groups[0].group_id }}" 
+
+    - debug:
+        msg: "group_id: {{ sg_id }}" 
+                
+    - name: Deploy {{ machine_name }} for {{ school_name }} as {{ team_name }}
+    # Basic provisioning example
+      ec2:
+        aws_access_key: "{{ access_key_id }}"
+        aws_secret_key: "{{ secret_access_key }}"
+        key_name: "{{ key_name }}"
+        instance_type: "{{ instance_type }}"
+        image: "{{ ami }}"
+        wait: yes
+        group_id: "{{ sg_id }}"
+        count: 1
+        vpc_subnet_id: "{{ subnet_id }}"
+        region: "us-east-1"
+        assign_public_ip: yes
+        instance_profile_name: EC2-SSM
+        instance_tags:
+          "Name" : "{{ machine_name }}"
+      register: ec2
+
+    - set_fact:
+        subnet_id: "{{ ec2 }}" 
+       
+    - debug:
+        msg: "{{ ec2.instances[0] }}" 
+        
+   
+    - name: Add new instance to host group
+      add_host:
+        hostname: "{{ item.public_ip }}"
+        groupname: launched
+      with_items: "{{ ec2.instances }}"
+
+    - name: Wait for SSH to come up
+      wait_for:
+        host: "{{ item.public_dns_name }}"
+        port: 22
+        delay: 30
+        timeout: 300
+        state: started
+      with_items: "{{ ec2.instances }}"
+
+# set route53
+
+# valid SSM

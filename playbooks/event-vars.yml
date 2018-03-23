@@ -1,0 +1,31 @@
+    # The friendly machine name of the AMI to deploy
+    machine_name: "{{ machine | default('AWS') }}"
+    # Standalone deploys can use the default, event will use team[00-99]
+    team_name: "{{ team | default('neccdc') }}"
+    # AMI selected are based in us-east-1
+    region: "us-east-1"
+    ini_file: "file=~/.aws/credentials"
+   
+    # Parameters specific to a team are maintained in the .aws/credentials file
+    white_cidr: "{{ lookup('ini', 'cidr section=neccdc {{ ini_file }}') }}"
+    campus_cidr: "{{ lookup('ini', 'cidr section={{ team_name }} {{ ini_file }}') }}"
+    access_key_id: "{{ lookup('ini', 'aws_access_key_id section={{ team_name }} {{ ini_file }}') }}"
+    secret_access_key: "{{ lookup('ini', 'aws_secret_access_key section={{ team_name }} {{ ini_file }}') }}"
+    key_name: "{{ lookup('ini', 'ssh_keyname section={{ team_name }} {{ ini_file }}') }}"
+    key_filename: "{{ lookup('ini', 'ssh_keyfile section={{ team_name }} {{ ini_file }}') }}"
+    account: "{{ lookup('ini', 'account_id section={{ team_name }} {{ ini_file }}') }}"
+    
+   
+    # Parameters specific to instance deployments
+    ami: "{{ lookup('ini', 'ami section={{ machine_name }} {{ ini_file }}') }}"
+    instance_type: "{{ lookup('ini', 'instance_type section={{ machine_name }} {{ ini_file }}') }}"
+    ip_address: "{{ lookup('ini', 'ip_address section={{ machine_name }} {{ ini_file }}') }}"
+    subnet_name: "{{ lookup('ini', 'subnet_name section={{ machine_name }} {{ ini_file }}') }}"
+    user_data_filename: "{{ lookup('ini', 'user_data_file section={{ machine_name }} {{ ini_file }}') }}"
+    event_domain: "wildeagle.net"
+    
+    # Palo Alto admin user
+    admin_username: "admin"
+    # Password defined for Palo Alto web interface
+    admin_password: "Neccdc-2018"
+

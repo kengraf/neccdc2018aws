@@ -1,0 +1,10 @@
+use OTRS;                                                                                         
+update user_preferences set preferences_value="sam@teamXX.wildeagle.net" where preferences_value="
+sam@team01.wildeagle.net";                                                                        
+update user_preferences set preferences_value="chen@teamXX.wildeagle.net" where preferences_value=
+"chen@team01.wildeagle.net";                                                                      
+update user_preferences set preferences_value="john@teamXX.wildeagle.net" where preferences_value=
+"john@team01.wildeagle.net";                                                                      
+update user_preferences set preferences_value="hercule@teamXX.wildeagle.net" where preferences_val
+ue="hercule@team01.wildeagle.net";  
+

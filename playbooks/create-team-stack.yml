@@ -1,0 +1,462 @@
+# FILENAME
+# create-team-stack.yml
+#
+# DESCRIPTION
+# Deploys a four phase stack
+# 
+# REQUIREMENTS
+# 
+# pip install boto3
+# pip install botocore
+# pip install ansible
+# ansible-galaxy install PaloAltoNetworks.paloaltonetworks
+#
+# EXECUTE
+#
+# Use default AWS credentials for testing if a team/school name is not provided
+# Expected:  team=team09
+#
+# Good practice: Passwords should NOT be provided in cleartext. They should be edited and encrypted using:
+# ansible-vault encrypt firewall-secrets.yml
+#
+# ansible-playbook ./playbooks/create-team-stack.yml  --extra-vars "team=XXX"
+#
+---
+- hosts: localhost
+  connection: local
+  gather_facts: False
+
+  roles:
+    - role: PaloAltoNetworks.paloaltonetworks
+    
+  vars_files:
+    - event-vars.yml
+
+  tasks:
+    - name: Create stack for {{ team_name }}
+      cloudformation:
+        aws_access_key: "{{ access_key_id }}"
+        aws_secret_key: "{{ secret_access_key }}"
+        stack_name: "NECCDC2018-{{ team_name }}"
+        state: "present"
+        region: "{{ region }}"
+        disable_rollback: false
+        template: "../templates/infrastructure.json"
+        template_parameters:
+          # This key is only known to the school and the event organizer
+          pKeyName: "{{ key_name }}"
+          # Artifact from Goldbase, CloudTrail is always turned on
+          pCreateCloudTrail: "no"
+          pCampusCIDR: "{{ campus_cidr }}"
+          pWhiteCIDR: "{{ white_cidr }}"
+          pTeamName: "{{ team_name }}"
+          pEventDomain: "{{ event_domain }}"
+        tags:
+          Stack: "blueteam_infrastructure"
+      register: cloudformation
+
+    - name: FirewallManagementEIP
+      debug:
+         msg: "{{ cloudformation.stack_outputs.FirewallManagementEIP }}"
+    - name: rFwPublicIP
+      debug:
+         msg: "{{ cloudformation.stack_outputs.rFwPublicIP }}"
+    - name: rFwPrivateIP
+      debug:
+         msg: "{{ cloudformation.stack_outputs.rFwPrivateIP }}"
+         
+
+    - name: wait for SSH prompt (timeout 10min)
+      wait_for: port=22 host="{{ cloudformation.stack_outputs.FirewallManagementEIP }}" timeout=600
+    - name: set admin password
+      panos_admpwd: ip_address="{{ cloudformation.stack_outputs.FirewallManagementEIP }}" key_filename="{{ key_filename }}" newpassword="{{ admin_password }}"
+      register: result
+      until: not result | failed
+      retries: 10
+      delay: 60
+    - name: configure ethernet1/1 for DHCP
+      panos_interface:
+        ip_address: "{{ cloudformation.stack_outputs.FirewallManagementEIP }}"
+        password: "{{ admin_password }}"
+        if_name: "ethernet1/1"
+        zone_name: "public"
+        create_default_route: "yes"
+        commit: False
+    - name: configure ethernet1/2 for DHCP
+      panos_interface:
+        ip_address: "{{ cloudformation.stack_outputs.FirewallManagementEIP }}"
+        password: "{{ admin_password }}"
+        if_name: "ethernet1/2"
+        zone_name: "private"
+        create_default_route: "no"
+        commit: False
+        
+    # Create services in additon to HTTP and HTTPS defaults
+    - name: create a global service for TCP 21
+      panos_object:
+        ip_address: "{{ cloudformation.stack_outputs.FirewallManagementEIP }}"
+        password: "{{ admin_password }}"
+        operation: 'add'
+        serviceobject: 'service-ftp'
+        destination_port: '21'
+        protocol: 'tcp'
+        description: 'ftp on 21'    
+    - name: create a global service for TCP 22
+      panos_object:
+        ip_address: "{{ cloudformation.stack_outputs.FirewallManagementEIP }}"
+        password: "{{ admin_password }}"
+        operation: 'add'
+        serviceobject: 'service-ssh'
+        destination_port: '22'
+        protocol: 'tcp'
+        description: 'ssh on 22'
+    - name: create a global service for TCP 110
+      panos_object:
+        ip_address: "{{ cloudformation.stack_outputs.FirewallManagementEIP }}"
+        password: "{{ admin_password }}"
+        operation: 'add'
+        serviceobject: 'service-pop3'
+        destination_port: '110'
+        protocol: 'tcp'
+        description: 'pop3 on 110'
+    - name: create a global service for TCP 143
+      panos_object:
+        ip_address: "{{ cloudformation.stack_outputs.FirewallManagementEIP }}"
+        password: "{{ admin_password }}"
+        operation: 'add'
+        serviceobject: 'service-imap'
+        destination_port: '143'
+        protocol: 'tcp'
+        description: 'imap on 143'
+    - name: create a global service for TCP 25
+      panos_object:
+        ip_address: "{{ cloudformation.stack_outputs.FirewallManagementEIP }}"
+        password: "{{ admin_password }}"
+        operation: 'add'
+        serviceobject: 'service-smtp'
+        destination_port: '25'
+        protocol: 'tcp'
+        description: 'smtp on 25'
+    - name: create a global service for TCP 587
+      panos_object:
+        ip_address: "{{ cloudformation.stack_outputs.FirewallManagementEIP }}"
+        password: "{{ admin_password }}"
+        operation: 'add'
+        serviceobject: 'service-smtps'
+        destination_port: '587'
+        protocol: 'tcp'
+        description: 'smtps on 587'
+    - name: create a global service for TCP 993
+      panos_object:
+        ip_address: "{{ cloudformation.stack_outputs.FirewallManagementEIP }}"
+        password: "{{ admin_password }}"
+        operation: 'add'
+        serviceobject: 'service-imaps'
+        destination_port: '993'
+        protocol: 'tcp'
+        description: 'imaps on 993'
+    - name: create a global service for TCP 995
+      panos_object:
+        ip_address: "{{ cloudformation.stack_outputs.FirewallManagementEIP }}"
+        password: "{{ admin_password }}"
+        operation: 'add'
+        serviceobject: 'service-pop3s'
+        destination_port: '995'
+        protocol: 'tcp'
+        description: 'pop3s on 995'
+    - name: create a global service for TCP 3306
+      panos_object:
+        ip_address: "{{ cloudformation.stack_outputs.FirewallManagementEIP }}"
+        password: "{{ admin_password }}"
+        operation: 'add'
+        serviceobject: 'service-mysql'
+        destination_port: '3306'
+        protocol: 'tcp'
+        description: 'mysql on 3306'
+    - name: create a global service for TCP 5900
+      panos_object:
+        ip_address: "{{ cloudformation.stack_outputs.FirewallManagementEIP }}"
+        password: "{{ admin_password }}"
+        operation: 'add'
+        serviceobject: 'service-vnc'
+        destination_port: '5900'
+        protocol: 'tcp'
+        description: 'vnc on 5900'
+ 
+    - name: create a global service for TCP 10000
+      panos_object:
+        ip_address: "{{ cloudformation.stack_outputs.FirewallManagementEIP }}"
+        password: "{{ admin_password }}"
+        operation: 'add'
+        serviceobject: 'service-http-10000'
+        destination_port: '10000'
+        protocol: 'tcp'
+        description: 'http on 10000'
+        
+    # Create DNAT rules
+    - name: Create HTTP NAT rule for www-proxy
+      panos_nat_rule:
+        ip_address: "{{ cloudformation.stack_outputs.FirewallManagementEIP }}"
+        password: "{{ admin_password }}"
+        operation: 'add'
+        rule_name: "NATHTTP"
+        source_zone: ["public"]
+        destination_zone: "public"
+        source_ip: ["any"]
+        destination_ip: ["10.0.0.100"]
+        service: "service-http"
+        snat_type: "dynamic-ip-and-port"
+        snat_interface: "ethernet1/2"
+        dnat_address: "10.0.1.101"
+        dnat_port: "80"
+        commit: "False"
+    - name: Create HTTPS NAT rule for www-proxy
+      panos_nat_rule:
+        ip_address: "{{ cloudformation.stack_outputs.FirewallManagementEIP }}"
+        password: "{{ admin_password }}"
+        operation: 'add'
+        rule_name: "NATHTTPS"
+        source_zone: ["public"]
+        destination_zone: "public"
+        source_ip: ["any"]
+        destination_ip: ["10.0.0.100"]
+        service: "service-https"
+        snat_type: "dynamic-ip-and-port"
+        snat_interface: "ethernet1/2"
+        dnat_address: "10.0.1.101"
+        dnat_port: "443"
+        commit: "False"
+    - name: Create FTP NAT rule for www-proxy
+      panos_nat_rule:
+        ip_address: "{{ cloudformation.stack_outputs.FirewallManagementEIP }}"
+        password: "{{ admin_password }}"
+        operation: 'add'
+        rule_name: "NATFTP"
+        source_zone: ["public"]
+        destination_zone: "public"
+        source_ip: ["any"]
+        destination_ip: ["10.0.0.100"]
+        service: "service-ftp"
+        snat_type: "dynamic-ip-and-port"
+        snat_interface: "ethernet1/2"
+        dnat_address: "10.0.1.101"
+        dnat_port: "21"
+        commit: "False"
+    - name: Create SSH NAT rule for www-proxy
+      panos_nat_rule:
+        ip_address: "{{ cloudformation.stack_outputs.FirewallManagementEIP }}"
+        password: "{{ admin_password }}"
+        operation: 'add'
+        rule_name: "NATSSH"
+        source_zone: ["public"]
+        destination_zone: "public"
+        source_ip: ["any"]
+        destination_ip: ["10.0.0.100"]
+        service: "service-ssh"
+        snat_type: "dynamic-ip-and-port"
+        snat_interface: "ethernet1/2"
+        dnat_address: "10.0.1.101"
+        dnat_port: "22"
+        commit: "False"
+        
+       
+    # Jumpbox DNAT rules
+    - name: Create SSH NAT rule for jumpbox
+      panos_nat_rule:
+        ip_address: "{{ cloudformation.stack_outputs.FirewallManagementEIP }}"
+        password: "{{ admin_password }}"
+        operation: 'add'
+        rule_name: "NATSSHsam"
+        source_zone: ["public"]
+        destination_zone: "public"
+        source_ip: ["any"]
+        destination_ip: ["10.0.0.100"]
+        service: "service-ssh"
+        snat_type: "dynamic-ip-and-port"
+        snat_interface: "ethernet1/2"
+        dnat_address: "10.0.1.101"
+        dnat_port: "22"
+        commit: "False"
+    - name: Create VNC NAT rule for jumpbox
+      panos_nat_rule:
+        ip_address: "{{ cloudformation.stack_outputs.FirewallManagementEIP }}"
+        password: "{{ admin_password }}"
+        operation: 'add'
+        rule_name: "NATVNC"
+        source_zone: ["public"]
+        destination_zone: "public"
+        source_ip: ["any"]
+        destination_ip: ["10.0.0.100"]
+        service: "service-vnc"
+        snat_type: "dynamic-ip-and-port"
+        snat_interface: "ethernet1/2"
+        dnat_address: "10.0.1.101"
+        dnat_port: "5900"
+        commit: "False"
+
+    # DNAT rules for mail server
+    - name: Create POP3 NAT rule for mail
+      panos_nat_rule:
+        ip_address: "{{ cloudformation.stack_outputs.FirewallManagementEIP }}"
+        password: "{{ admin_password }}"
+        operation: 'add'
+        rule_name: "NATPOP3"
+        source_zone: ["public"]
+        destination_zone: "public"
+        source_ip: ["any"]
+        destination_ip: ["10.0.0.100"]
+        service: "service-pop3"
+        snat_type: "dynamic-ip-and-port"
+        snat_interface: "ethernet1/2"
+        dnat_address: "10.0.1.104"
+        dnat_port: "110"
+        commit: "False"
+    - name: Create POP3s NAT rule for mail
+      panos_nat_rule:
+        ip_address: "{{ cloudformation.stack_outputs.FirewallManagementEIP }}"
+        password: "{{ admin_password }}"
+        operation: 'add'
+        rule_name: "NATPOP3S"
+        source_zone: ["public"]
+        destination_zone: "public"
+        source_ip: ["any"]
+        destination_ip: ["10.0.0.100"]
+        service: "service-pop3s"
+        snat_type: "dynamic-ip-and-port"
+        snat_interface: "ethernet1/2"
+        dnat_address: "10.0.1.104"
+        dnat_port: "995"
+        commit: "False"
+    - name: Create IMAP NAT rule for mail
+      panos_nat_rule:
+        ip_address: "{{ cloudformation.stack_outputs.FirewallManagementEIP }}"
+        password: "{{ admin_password }}"
+        operation: 'add'
+        rule_name: "NATIMAP"
+        source_zone: ["public"]
+        destination_zone: "public"
+        source_ip: ["any"]
+        destination_ip: ["10.0.0.100"]
+        service: "service-imap"
+        snat_type: "dynamic-ip-and-port"
+        snat_interface: "ethernet1/2"
+        dnat_address: "10.0.1.104"
+        dnat_port: "143"
+        commit: "False"
+    - name: Create IMAPS NAT rule for mail
+      panos_nat_rule:
+        ip_address: "{{ cloudformation.stack_outputs.FirewallManagementEIP }}"
+        password: "{{ admin_password }}"
+        operation: 'add'
+        rule_name: "NATIMAPS"
+        source_zone: ["public"]
+        destination_zone: "public"
+        source_ip: ["any"]
+        destination_ip: ["10.0.0.100"]
+        service: "service-imaps"
+        snat_type: "dynamic-ip-and-port"
+        snat_interface: "ethernet1/2"
+        dnat_address: "10.0.1.104"
+        dnat_port: "993"
+        commit: "False"
+    - name: Create SMTP NAT rule for mail
+      panos_nat_rule:
+        ip_address: "{{ cloudformation.stack_outputs.FirewallManagementEIP }}"
+        password: "{{ admin_password }}"
+        operation: 'add'
+        rule_name: "NATSMTP"
+        source_zone: ["public"]
+        destination_zone: "public"
+        source_ip: ["any"]
+        destination_ip: ["10.0.0.100"]
+        service: "service-pop3"
+        snat_type: "dynamic-ip-and-port"
+        snat_interface: "ethernet1/2"
+        dnat_address: "10.0.1.104"
+        dnat_port: "25"
+        commit: "False"
+    - name: Create SMTPS NAT rule for mail
+      panos_nat_rule:
+        ip_address: "{{ cloudformation.stack_outputs.FirewallManagementEIP }}"
+        password: "{{ admin_password }}"
+        operation: 'add'
+        rule_name: "NATSMTPS"
+        source_zone: ["public"]
+        destination_zone: "public"
+        source_ip: ["any"]
+        destination_ip: ["10.0.0.100"]
+        service: "service-smtps"
+        snat_type: "dynamic-ip-and-port"
+        snat_interface: "ethernet1/2"
+        dnat_address: "10.0.1.104"
+        dnat_port: "587"
+        commit: "False"
+    - name: Create MYSQL NAT rule for OTRS
+      panos_nat_rule:
+        ip_address: "{{ cloudformation.stack_outputs.FirewallManagementEIP }}"
+        password: "{{ admin_password }}"
+        operation: 'add'
+        rule_name: "NATMYSQL"
+        source_zone: ["public"]
+        destination_zone: "public"
+        source_ip: ["any"]
+        destination_ip: ["10.0.0.100"]
+        service: "service-mysql"
+        snat_type: "dynamic-ip-and-port"
+        snat_interface: "ethernet1/2"
+        dnat_address: "10.0.1.103"
+        dnat_port: "3306"
+        commit: "False"
+
+
+
+    - name: NAT All out
+      panos_nat_rule:
+        ip_address: "{{ cloudformation.stack_outputs.FirewallManagementEIP }}"
+        password: "{{ admin_password }}"
+        operation: 'add'
+        rule_name: "NATAllOut"
+        source_zone: ["private"]
+        destination_zone: "public"
+        source_ip: ["any"]
+        destination_ip: ["any"]
+        snat_type: "dynamic-ip-and-port"
+        snat_interface: "ethernet1/1"
+        commit: "False"
+    - name: add a rule to allow HTTP
+      panos_security_rule:
+        ip_address: "{{ cloudformation.stack_outputs.FirewallManagementEIP }}"
+        password: "{{ admin_password }}"
+        operation: 'add'
+        rule_name: 'Web traffic'
+        service: 'service-http'
+        description: 'Allow HTTP traffic'
+        source_zone: ['public']
+        destination_zone: ['private']
+        action: 'allow'
+        commit: "False"
+    - name: add a rule to allow SSH
+      panos_security_rule:
+        ip_address: "{{ cloudformation.stack_outputs.FirewallManagementEIP }}"
+        password: "{{ admin_password }}"
+        operation: 'add'
+        rule_name: 'SSH traffic'
+        service: 'service-ssh'
+        description: 'Allow SSH traffic'
+        source_zone: ['public']
+        destination_zone: ['private']
+        action: 'allow'
+        commit: "True"
+    - name: add a rule to allow SNAT traffic
+      panos_security_rule:
+        ip_address: "{{ cloudformation.stack_outputs.FirewallManagementEIP }}"
+        password: "{{ admin_password }}"
+        operation: 'add'
+        rule_name: 'Enable NAT'
+        description: 'Allow private zone NAT traffic'
+        source_zone: ['any']
+        destination_zone: ['any']
+        action: 'allow'
+        commit: "True"
+
+

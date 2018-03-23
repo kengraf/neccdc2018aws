@@ -1,0 +1,2 @@
+sed -i -e "s/teamXX.wildeagle.net/{team}.wildeagle.net/g" /opt/otrs/emailfix.mysql
+mysql -usam -pChange.me! < /opt/otrs/emailfix.mysql
